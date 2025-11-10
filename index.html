@@ -1,1 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lifemaps Orbit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100">
+    <div id="root" class="min-h-screen"></div>
 
+    <script type="module">
+      import React, { useMemo, useState, useEffect } from "https://esm.sh/react@18";
+      import { createRoot } from "https://esm.sh/react-dom@18/client";
+
+      const CENTER_IMG = "https://www.shutterstock.com/image-photo/happy-middle-aged-professional-business-260nw-2454390621.jpg";
+
+      const DATASETS = {
+        financial: {
+          title: "Financial",
+          nodes: [
+            { key: "cash", label: "Cash Flow", color: "#10b981", confidence: 0.92, focus: 0.9, quadrant: "Short • High Confidence", summary: "Paycheck steady; savings trending up." },
+            { key: "debt", label: "Debt", color: "#ef4444", confidence: 0.22, focus: 0.7, quadrant: "Short • Low Confidence", summary: "Credit utilization elevated; snowball plan in progress." },
+            { key: "invest", label: "Investing", color: "#3b82f6", confidence: 0.45, focus: 0.6, quadrant: "Long • Needs Review", summary: "401(k) funded; Roth incomplete; needs rebalance rule." },
+            { key: "retire", label: "Retirement", color: "#8b5cf6", confidence: 0.4, focus: 0.55, quadrant: "Long • Mid Confidence", summary: "On track for ~67% income at 65; review glidepath." },
+            { key: "family", label: "Family / Kids", color: "#f59e0b", confidence: 0.84, focus: 0.8, quadrant: "Long • High Confidence", summary: "529 funded; guardianship set; summer budgeted." },
+            { key: "ins", label: "Insurance", color: "#06b6d4", confidence: 0.34, focus: 0.55, quadrant: "Mid • Attention Needed", summary: "Term life ok; disability coverage missing." },
+            { key: "tax", label: "Taxes", color: "#14b8a6", confidence: 0.28, focus: 0.6, quadrant: "Seasonal • Review", summary: "W-4 updated; quarterlies needed for side gig." },
+            { key: "purpose", label: "Purpose", color: "#eab308", confidence: 0.95, focus: 0.95, quadrant: "Long • High Confidence", summary: "Giving on autopilot; legacy letter drafted." }
+          ],
+          subnodes: {
+            cash: {
+              title: "Cash Flow",
+              items: [
+                { name: "Income: Salary ($145k/yr)", status: "ok", progress: 100 },
+                { name: "Income: Side Gig ($1.2k/mo)", status: "warn", progress: 40 },
+                { name: "Spending: Needs (52%)", status: "ok", progress: 100 },
+                { name: "Spending: Wants (26%)", status: "risk", progress: 10 },
+                { name: "Savings Rate (12%)", status: "warn", progress: 40 },
+                { name: "Emergency Fund (4.0 mo.)", status: "warn", progress: 50 }
+              ]
+            },
+            debt: {
+              title: "Debt",
+              items: [
+                { name: "Credit Utilization (36%)", status: "warn", progress: 30 },
+                { name: "Student Loans ($18k @ 4.2%)", status: "ok", progress: 80 },
+                { name: "Auto Loan ($9.4k @ 3.1%)", status: "ok", progress: 90 },
+                { name: "Mortgage (2.9% fixed)", status: "ok", progress: 95 }
+              ]
+            },
+            invest: {
+              title: "Investing",
+              items: [
+                { name: "401(k) Contribution (9%)", status: "warn", progress: 45 },
+                { name: "Roth IRA (2025 incomplete)", status: "warn", progress: 20 },
+                { name: "HSA (family) funded", status: "ok", progress: 80 }
+              ]
+            },
+            retire: {
+              title: "Retirement",
+              items: [
+                { name: "Projected Income @65", status: "warn", progress: 55 },
+                { name: "Glidepath Review", status: "warn", progress: 30 }
+              ]
+            },
+            family: {
+              title: "Family / Kids",
+              items: [
+                { name: "529 (2 kids: $14.2k)", status: "warn", progress: 40 },
+                { name: "Summer Camps Budgeted", status: "ok", progress: 90 },
+                { name: "Guardian Designation", status: "ok", progress: 100 }
+              ]
+            },
+            ins: {
+              title: "Insurance",
+              items: [
+                { name: "Term Life (20yr $1M)", status: "ok", progress: 100 },
+                { name: "Umbrella ($1M)", status: "ok", progress: 80 },
+                { name: "Disability (own-occ) missing", status: "risk", progress: 10 }
+              ]
+            },
+            tax: {
+              title: "Taxes",
+              items: [
+                { name: "Withholding Check", status: "ok", progress: 100 },
+                { name: "Quarterlies (side gig)", status: "warn", progress: 25 }
+              ]
+            },
+            purpose: {
+              title: "Purpose",
+              items: [
+                { name: "Giving Plan (3% auto)", status: "ok", progress: 100 },
+                { name: "Legacy Letter (draft 1)", status: "ok", progress: 80 }
+              ]
+            }
+          },
+          experts: {
+            cash: [
+              { name: "Ramit Sethi", org: "IWT", avatar: "https://i.pravatar.cc/80?img=12", followers: 324000, ts: 1730250000, tip: "Automate one transfer this week—small amount, big win." },
+              { name: "Tiffany Aliche", org: "The Budgetnista", avatar: "https://i.pravatar.cc/80?img=32", followers: 190000, ts: 1730300000, tip: "Pick one spend to reset for 7 days; celebrate the small win." },
+              { name: "Paula Pant", org: "Afford Anything", avatar: "https://i.pravatar.cc/80?img=45", followers: 154000, ts: 1730150000, tip: "You can afford anything—just not everything. Choose one priority." }
+            ],
+            debt: [
+              { name: "Dave Ramsey", org: "Ramsey Solutions", avatar: "https://i.pravatar.cc/80?img=5", followers: 2500000, ts: 1730220000, tip: "List debts smallest to largest; attack the smallest first." },
+              { name: "Melanie Lockert", org: "Dear Debt", avatar: "https://i.pravatar.cc/80?img=47", followers: 72000, ts: 1729900000, tip: "Write a breakup letter to your top balance. Get specific." },
+              { name: "Debt Free Guys", org: "DFG", avatar: "https://i.pravatar.cc/80?img=23", followers: 88000, ts: 1729800000, tip: "Freeze the card that tempts you. Friction buys choice." }
+            ],
+            invest: [
+              { name: "JL Collins", org: "Simple Path", avatar: "https://i.pravatar.cc/80?img=14", followers: 210000, ts: 1730280000, tip: "Buy the whole market and hold. Boredom is an edge." },
+              { name: "Ben Felix", org: "PWL Capital", avatar: "https://i.pravatar.cc/80?img=28", followers: 310000, ts: 1730320000, tip: "Draft a 1-page investment policy. Rules beat moods." },
+              { name: "Christine Benz", org: "Morningstar", avatar: "https://i.pravatar.cc/80?img=18", followers: 120000, ts: 1730100000, tip: "Use a ±5% rebalance band. Act on drift, not fear." }
+            ],
+            retire: [
+              { name: "Wade Pfau", org: "Retirement Researcher", avatar: "https://i.pravatar.cc/80?img=58", followers: 65000, ts: 1729700000, tip: "Run a bad decade scenario. Adjust now if needed." },
+              { name: "Michael Kitces", org: "Kitces.com", avatar: "https://i.pravatar.cc/80?img=3", followers: 420000, ts: 1730260000, tip: "Match withdrawals to volatility. Buckets and guardrails." },
+              { name: "Christine Benz", org: "Morningstar", avatar: "https://i.pravatar.cc/80?img=26", followers: 120000, ts: 1729600000, tip: "Name your non-negotiables; fund those first." }
+            ],
+            family: [
+              { name: "Ron Lieber", org: "NYT Your Money", avatar: "https://i.pravatar.cc/80?img=55", followers: 54000, ts: 1729400000, tip: "Give kids a weekly money job: earn, save, spend, give." },
+              { name: "Ann Carrns", org: "NYT Finance", avatar: "https://i.pravatar.cc/80?img=35", followers: 38000, ts: 1729300000, tip: "Automate a small 529 deposit each payday." },
+              { name: "Rachel Cruze", org: "Ramsey", avatar: "https://i.pravatar.cc/80?img=42", followers: 310000, ts: 1729200000, tip: "Talk money at dinner like weather—normal and frequent." }
+            ],
+            ins: [
+              { name: "Tara Unverzagt", org: "South Bay FP", avatar: "https://i.pravatar.cc/80?img=7", followers: 12000, ts: 1729100000, tip: "Check disability coverage; your income is the asset." },
+              { name: "HerMoney", org: "Insurance Guides", avatar: "https://i.pravatar.cc/80?img=19", followers: 98000, ts: 1729000000, tip: "Term life often wins: simpler, cheaper, enough." },
+              { name: "NerdWallet Team", org: "Insurance", avatar: "https://i.pravatar.cc/80?img=60", followers: 520000, ts: 1728800000, tip: "Add umbrella coverage as net worth grows." }
+            ],
+            tax: [
+              { name: "Kay Bell", org: "Don't Mess With Taxes", avatar: "https://i.pravatar.cc/80?img=9", followers: 27000, ts: 1728700000, tip: "Side gig? Set a 25–30% tax bucket for quarterlies." },
+              { name: "IRS Publications", org: "IRS", avatar: "https://i.pravatar.cc/80?img=1", followers: 1000000, ts: 1728600000, tip: "Update your W-4 after life changes to avoid surprises." },
+              { name: "Ed Slott", org: "IRA Help", avatar: "https://i.pravatar.cc/80?img=41", followers: 130000, ts: 1728500000, tip: "Time Roth conversions in low-income years." }
+            ],
+            purpose: [
+              { name: "John Cortines", org: "Generosity Path", avatar: "https://i.pravatar.cc/80?img=13", followers: 18000, ts: 1728400000, tip: "Pick a giving percent before money arrives." },
+              { name: "Arthur Brooks", org: "Harvard", avatar: "https://i.pravatar.cc/80?img=39", followers: 420000, ts: 1728300000, tip: "Schedule joy; money follows meaning." },
+              { name: "Peter Singer", org: "EA", avatar: "https://i.pravatar.cc/80?img=20", followers: 260000, ts: 1728200000, tip: "Compare charities like investments. Evidence first." }
+            ]
+          }
+        },
+        personal: {
+          title: "Personal",
+          nodes: [
+            { key: "habits", label: "Habits", color: "#06b6d4", confidence: 0.82, focus: 0.75, quadrant: "Daily • High", summary: "AM routine consistent; workouts stable." },
+            { key: "learning", label: "Learning", color: "#3b82f6", confidence: 0.87, focus: 0.85, quadrant: "Growth • Very High", summary: "Korean practice strong; reading curated." },
+            { key: "relationships", label: "Relationships", color: "#f97316", confidence: 0.7, focus: 0.75, quadrant: "Core • High", summary: "Weekly family check-ins; add date night." },
+            { key: "faith", label: "Faith", color: "#eab308", confidence: 0.93, focus: 0.95, quadrant: "Core • Very High", summary: "Service weekly; prayer rhythm solid." },
+            { key: "play", label: "Play", color: "#10b981", confidence: 0.32, focus: 0.5, quadrant: "Joy • Needs Attention", summary: "Weekend micro-adventures missing." },
+            { key: "work", label: "Work", color: "#8b5cf6", confidence: 0.72, focus: 0.85, quadrant: "Voc • High", summary: "Focus blocks help; guard boundaries." },
+            { key: "space", label: "Environment", color: "#14b8a6", confidence: 0.52, focus: 0.6, quadrant: "Home • Mid", summary: "Closet declutter queued." },
+            { key: "time", label: "Time", color: "#ef4444", confidence: 0.22, focus: 0.6, quadrant: "Scarcity • Low", summary: "Protect sabbath; cut meetings by 10%." }
+          ],
+          subnodes: {},
+          experts: {
+            time: [
+              { name: "Cal Newport", org: "Deep Work", avatar: "https://i.pravatar.cc/80?img=52", followers: 410000, ts: 1730200000, tip: "Protect one 90-minute deep work block tomorrow." },
+              { name: "Laura Vanderkam", org: "Time Management", avatar: "https://i.pravatar.cc/80?img=34", followers: 120000, ts: 1729905000, tip: "Plan your week on Friday; future-you is calmer." },
+              { name: "James Clear", org: "Atomic Habits", avatar: "https://i.pravatar.cc/80?img=8", followers: 1800000, ts: 1729804000, tip: "Make the good thing easy and the bad thing hard." }
+            ]
+          }
+        },
+        health: {
+          title: "Health",
+          nodes: [
+            { key: "sleep", label: "Sleep", color: "#8b5cf6", confidence: 0.52, focus: 0.8, quadrant: "Recovery • Mid", summary: "7h10m avg; bedtime drift." },
+            { key: "nutrition", label: "Nutrition", color: "#10b981", confidence: 0.42, focus: 0.7, quadrant: "Fuel • Needs Work", summary: "Protein good; added sugar high." },
+            { key: "fitness", label: "Fitness", color: "#ef4444", confidence: 0.3, focus: 0.6, quadrant: "Training • Low", summary: "Strength 2x/wk goal unmet." },
+            { key: "stress", label: "Stress", color: "#06b6d4", confidence: 0.25, focus: 0.55, quadrant: "Load • Low", summary: "Breathing helps; work spikes." },
+            { key: "checkups", label: "Checkups", color: "#f59e0b", confidence: 0.86, focus: 0.6, quadrant: "Prevent • High", summary: "Dental booked; PCP annual due soon." },
+            { key: "labs", label: "Labs", color: "#3b82f6", confidence: 0.75, focus: 0.55, quadrant: "Data • High", summary: "A1C 5.1; lipids trending better." },
+            { key: "injury", label: "Injury", color: "#14b8a6", confidence: 0.9, focus: 0.45, quadrant: "Acute • High", summary: "PT exercises working." },
+            { key: "prevention", label: "Prevention", color: "#eab308", confidence: 0.8, focus: 0.7, quadrant: "Shield • High", summary: "Vaccines up to date." }
+          ],
+          subnodes: {},
+          experts: {
+            sleep: [
+              { name: "Matthew Walker", org: "Sleep Foundation", avatar: "https://i.pravatar.cc/80?img=24", followers: 520000, ts: 1730120000, tip: "Anchor wake-up time—even on weekends." },
+              { name: "Andrew Huberman", org: "Huberman Lab", avatar: "https://i.pravatar.cc/80?img=56", followers: 4100000, ts: 1730145000, tip: "Get bright light within an hour of waking." },
+              { name: "Michael Breus", org: "Sleep Doctor", avatar: "https://i.pravatar.cc/80?img=51", followers: 180000, ts: 1729900000, tip: "Know your chronotype and plan deep work accordingly." }
+            ]
+          }
+        }
+      };
+
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+      function Pill({ status }) {
+        const map = {
+          ok: "bg-emerald-500/15 text-emerald-400",
+          warn: "bg-amber-500/15 text-amber-400",
+          risk: "bg-rose-500/15 text-rose-400"
+        };
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || "bg-zinc-500/10 text-zinc-300"}`}>
+            {String(status || "").toUpperCase()}
+          </span>
+        );
+      }
+
+      function useNow() {
+        const [t, setT] = useState(0);
+        useEffect(() => {
+          let raf;
+          const loop = (time) => {
+            setT(time / 1000);
+            raf = requestAnimationFrame(loop);
+          };
+          raf = requestAnimationFrame(loop);
+          return () => cancelAnimationFrame(raf);
+        }, []);
+        return t;
+      }
+
+      function Legend({ tone }) {
+        const text = tone === "dark" ? "#d1d5db" : "#334155";
+        const sub = tone === "dark" ? "#9ca3af" : "#64748b";
+        const border = tone === "dark" ? "border-white/15" : "border-black/10";
+        const bg = tone === "dark" ? "bg-black/30" : "bg-white/80";
+        return (
+          <div className={`inline-flex items-start gap-4 px-3 py-2 rounded-xl border ${border} ${bg} backdrop-blur-sm text-xs`}> 
+            <div className="font-medium" style={{ color: text }}>Legend</div>
+            <div className="space-y-0.5" style={{ color: sub }}>
+              <div>Near = high confidence</div>
+              <div>Far = needs attention</div>
+              <div>Size = focus</div>
+              <div>Hover for highlights • Click to select</div>
+            </div>
+          </div>
+        );
+      }
+
+      function summarizeHealth(conf, items = [], progress = {}) {
+        const arr = items.map((it) => ({
+          name: it.name,
+          p:
+            typeof it.progress === "number"
+              ? it.progress
+              : typeof progress[it.name] === "number"
+              ? progress[it.name]
+              : it.status === "ok"
+              ? 100
+              : it.status === "warn"
+              ? 40
+              : 10
+        }));
+        const avg = arr.length ? arr.reduce((a, b) => a + b.p, 0) / arr.length : 0;
+        const overall = Math.round(conf * 100 * 0.5 + avg * 0.5);
+        let label = "At Risk";
+        let badge = "bg-rose-500";
+        if (overall >= 80) {
+          label = "Healthy";
+          badge = "bg-emerald-500";
+        } else if (overall >= 55) {
+          label = "Stable";
+          badge = "bg-amber-500";
+        }
+        const priorities = [...arr].sort((a, b) => a.p - b.p).slice(0, 3);
+        const summary =
+          overall >= 80
+            ? "Strong footing with a few tune-ups."
+            : overall >= 55
+            ? "Solid baseline—focus on two or three improvements."
+            : "Momentum needed—pick one small win to start.";
+        return { overall, label, badge, priorities, summary };
+      }
+
+      function OrbitSVG({ nodes, selectedKey, onSelect, title, tone }) {
+        const t = useNow();
+        const [hover, setHover] = useState(null);
+        const [mouse, setMouse] = useState({ x: 0, y: 0 });
+        const size = 560;
+        const cx = size / 2;
+        const cy = size / 2;
+        const baseR = 110;
+        const bands = [0, 70, 140];
+        const items = useMemo(
+          () =>
+            nodes.map((n, i) => {
+              const angle = (i / nodes.length) * Math.PI * 2;
+              const radius = baseR + (1 - n.confidence) * 130;
+              const bob = Math.sin(t * 1.2 + i) * 6;
+              const x = cx + Math.cos(angle) * radius;
+              const y = cy + Math.sin(angle) * radius + bob;
+              const r = 8 + Math.round((n.focus ?? 0.6) * 6);
+              return { ...n, x, y, r };
+            }),
+          [t, nodes]
+        );
+        const textMain = tone === "dark" ? "#a1a1aa" : "#475569";
+        const textLabel = tone === "dark" ? "#e5e7eb" : "#111827";
+        const ring = tone === "dark" ? "#4b5563" : "#cbd5e1";
+
+        return (
+          <div className="relative w-full h-full">
+            <svg
+              width="100%"
+              height={size}
+              viewBox={`0 0 ${size} ${size}`}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setMouse({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+              }}
+            >
+              <defs>
+                <radialGradient id="bgGrad" cx="50%" cy="50%" r="75%">
+                  {tone === "dark" ? (
+                    <>
+                      <stop offset="0%" stopColor="#0f1115" />
+                      <stop offset="35%" stopColor="#0c0f13" />
+                      <stop offset="100%" stopColor="#06070a" />
+                    </>
+                  ) : (
+                    <>
+                      <stop offset="0%" stopColor="#ffffff" />
+                      <stop offset="60%" stopColor="#f3f4f6" />
+                      <stop offset="100%" stopColor="#ffffff" />
+                    </>
+                  )}
+                </radialGradient>
+                <radialGradient id="vignette" cx="50%" cy="50%" r="80%">
+                  {tone === "dark" ? (
+                    <>
+                      <stop offset="60%" stopColor="rgba(0,0,0,0)" />
+                      <stop offset="100%" stopColor="rgba(0,0,0,0.22)" />
+                    </>
+                  ) : (
+                    <>
+                      <stop offset="60%" stopColor="rgba(255,255,255,0)" />
+                      <stop offset="100%" stopColor="rgba(0,0,0,0.06)" />
+                    </>
+                  )}
+                </radialGradient>
+                <clipPath id="avatarClip">
+                  <circle cx={cx} cy={cy} r={26} />
+                </clipPath>
+              </defs>
+              <rect x="0" y="0" width={size} height={size} fill="url(#bgGrad)" rx="16" />
+              <rect x="0" y="0" width={size} height={size} fill="url(#vignette)" rx="16" />
+              {bands.map((b, i) => (
+                <circle key={i} cx={cx} cy={cy} r={baseR + b} fill="none" stroke={ring} strokeOpacity={tone === "dark" ? ".32" : ".45"} strokeWidth="1" />
+              ))}
+              <g>
+                <image href={CENTER_IMG} x={cx - 26} y={cy - 26} width="52" height="52" preserveAspectRatio="xMidYMid slice" clipPath="url(#avatarClip)" />
+                <circle cx={cx} cy={cy} r={26} fill="none" stroke={tone === "dark" ? "#ffffff" : "#000000"} strokeOpacity=".18" />
+              </g>
+              <text x={cx} y={cy + 48} textAnchor="middle" fontSize="13" fill={textMain}>
+                YOU • {title}
+              </text>
+              {items.map((it) => (
+                <g
+                  key={it.key}
+                  onClick={() => onSelect(it)}
+                  onMouseEnter={() => setHover(it)}
+                  onMouseLeave={() => setHover(null)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <circle cx={it.x} cy={it.y} r={selectedKey === it.key ? it.r + 3 : it.r} fill={it.color} />
+                  <text x={it.x} y={it.y - (it.r + 10)} textAnchor="middle" fontSize="11" fill={textLabel}>
+                    {it.label}
+                  </text>
+                </g>
+              ))}
+              {hover ? (
+                <foreignObject x={Math.min(mouse.x + 12, size - 220)} y={Math.min(mouse.y + 12, size - 96)} width="208" height="90">
+                  <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    style={{
+                      background: tone === "dark" ? "#0b0b0c" : "rgba(255,255,255,0.95)",
+                      border: `1px solid ${tone === "dark" ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"}`,
+                      borderRadius: "10px",
+                      color: tone === "dark" ? "#e5e7eb" : "#111827",
+                      fontSize: "12px",
+                      lineHeight: "1.35",
+                      padding: "8px 10px",
+                      width: "188px",
+                      whiteSpace: "normal",
+                      wordWrap: "break-word"
+                    }}
+                  >
+                    <div style={{ color: tone === "dark" ? "#a1a1aa" : "#475569", marginBottom: "2px" }}>{hover.label}</div>
+                    <div>
+                      {(hover.confidence >= 0.75
+                        ? "Feels steady — "
+                        : hover.confidence >= 0.5
+                        ? "Mostly okay — "
+                        : "Could use attention — ") + (hover.summary || "Highlights coming soon.")}
+                    </div>
+                  </div>
+                </foreignObject>
+              ) : null}
+            </svg>
+          </div>
+        );
+      }
+
+      function ProgressRow({ item, tone }) {
+        const barBg = tone === "dark" ? "bg-zinc-800" : "bg-zinc-200";
+        const barFg = item.status === "ok" ? "bg-emerald-500" : item.status === "warn" ? "bg-amber-400" : "bg-rose-500";
+        const text = tone === "dark" ? "text-zinc-200" : "text-zinc-800";
+        return (
+          <div className="space-y-1">
+            <div className={`flex items-center justify-between text-sm ${text}`}>
+              <span className="pr-3 font-medium">{item.name}</span>
+              <Pill status={item.status} />
+            </div>
+            <div className={`h-2 rounded-full overflow-hidden ${barBg}`}>
+              <div className={`${barFg} h-full`} style={{ width: `${clamp(item.progress ?? 0, 0, 100)}%` }}></div>
+            </div>
+          </div>
+        );
+      }
+
+      function VoicesStrip({ items = [], tone, selectedLabel, onStartChat, following = new Set(), onToggleFollow }) {
+        const [hover, setHover] = useState(false);
+        if (!items || items.length === 0) return null;
+        const border = tone === "dark" ? "border-zinc-800/80" : "border-zinc-200";
+        const bg = tone === "dark" ? "bg-zinc-900/40" : "bg-white/70";
+        const tipBg = tone === "dark" ? "bg-zinc-800 text-zinc-200 border-white/10" : "bg-white text-zinc-800 border-zinc-200";
+        const infoBtn = tone === "dark" ? "bg-white/10 text-zinc-200 hover:bg-white/20" : "bg-zinc-200 text-zinc-700 hover:bg-zinc-300";
+        const titleColor = tone === "dark" ? "text-zinc-300" : "text-zinc-700";
+        return (
+          <div className={`rounded-2xl border p-3 ${bg} ${border}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className={`text-xs uppercase tracking-wide ${titleColor}`}>
+                Tips From Top Voices <span className="text-zinc-500">(Powered by AI)</span>
+              </div>
+              <div className="relative">
+                <button
+                  onMouseEnter={() => setHover(true)}
+                  onMouseLeave={() => setHover(false)}
+                  className={`w-5 h-5 rounded-full grid place-items-center text-xs ${infoBtn}`}
+                >
+                  i
+                </button>
+                {hover ? (
+                  <div
+                    className={`absolute right-0 mt-2 w-72 text-xs p-3 rounded-lg border z-10 ${
+                      tone === "dark" ? "bg-black/80 text-zinc-200 border-white/15" : "bg-white text-zinc-700 border-zinc-200"
+                    }`}
+                  >
+                    Tips synthesized from expert content by AI. Educational only. Not financial, legal, medical, or tax advice.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {items.slice(0, 3).map((ex, i) => {
+                const isFollowing = following.has(ex.name);
+                const followBtn = isFollowing
+                  ? tone === "dark"
+                    ? "bg-zinc-700 text-zinc-200"
+                    : "bg-zinc-200 text-zinc-800"
+                  : tone === "dark"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-emerald-500 text-white";
+                return (
+                  <div
+                    key={`${ex.name}-${i}`}
+                    className={`rounded-xl border p-3 flex flex-col gap-2 transition ${
+                      tone === "dark"
+                        ? "border-white/10 hover:border-white/20 hover:bg-white/5"
+                        : "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img src={ex.avatar} alt={ex.name} className="w-8 h-8 rounded-full object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <div className={`${tone === "dark" ? "text-zinc-100" : "text-zinc-900"} truncate`}>{ex.name}</div>
+                        <div className={`${tone === "dark" ? "text-zinc-500" : "text-zinc-600"} text-[11px] truncate`}>{ex.org}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`${tone === "dark" ? "text-zinc-400" : "text-zinc-600"} text-[11px] tabular-nums`}>
+                          {(ex.followers || 0).toLocaleString()} followers
+                        </span>
+                        <button
+                          onClick={() => onToggleFollow && onToggleFollow(ex.name)}
+                          className={`text-[11px] px-2 py-1 rounded-full ${followBtn}`}
+                        >
+                          {isFollowing ? "Following" : "Follow"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className={`rounded-2xl px-3 py-2 text-sm border ${tipBg}`}>
+                      {ex.tip || "A concise, actionable tip appears here."}
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => onStartChat && onStartChat(ex, selectedLabel)}
+                        className={`text-xs px-2.5 py-1.5 rounded-lg ${
+                          tone === "dark" ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-emerald-500 hover:bg-emerald-400 text-white"
+                        }`}
+                      >
+                        Chat More
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      function DetailPanel({ dataset, selected, tone }) {
+        if (!selected) return null;
+        const isDark = tone === "dark";
+        const textPrimary = isDark ? "text-zinc-100" : "text-zinc-900";
+        const textSecondary = isDark ? "text-zinc-400" : "text-zinc-600";
+        const cardBg = isDark ? "bg-zinc-900/50 border-zinc-800" : "bg-white/80 border-zinc-200";
+        const subnodes = dataset.subnodes?.[selected.key]?.items || [];
+        const healthSummary = summarizeHealth(selected.confidence, subnodes);
+        return (
+          <div className={`rounded-3xl border ${cardBg} p-6 space-y-6 backdrop-blur`}> 
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className={`text-sm uppercase tracking-wide ${textSecondary}`}>{dataset.title}</div>
+                <div className={`text-2xl font-semibold ${textPrimary}`}>{selected.label}</div>
+              </div>
+              <div className="text-right">
+                <div className={`text-xs font-medium px-2 py-1 rounded-full inline-block ${
+                  selected.confidence >= 0.75
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : selected.confidence >= 0.5
+                    ? "bg-amber-500/20 text-amber-300"
+                    : "bg-rose-500/20 text-rose-300"
+                }`}>
+                  Confidence {(selected.confidence * 100).toFixed(0)}%
+                </div>
+                <div className={`text-xs mt-2 ${textSecondary}`}>{selected.quadrant}</div>
+              </div>
+            </div>
+            <p className={`${textSecondary} leading-relaxed`}>{selected.summary}</p>
+            {subnodes.length ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className={`text-sm font-semibold ${textPrimary}`}>Focus Checklist</h3>
+                  <div className={`text-xs px-2 py-1 rounded-full text-white ${healthSummary.badge}`}>
+                    {healthSummary.label} · {healthSummary.overall}%
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  {subnodes.map((item) => (
+                    <ProgressRow key={item.name} item={item} tone={tone} />
+                  ))}
+                </div>
+                <div className={`${textSecondary} text-sm`}>{healthSummary.summary}</div>
+              </div>
+            ) : (
+              <div className={`${textSecondary} text-sm`}>No detailed checklist yet. Capture notes and next actions soon.</div>
+            )}
+          </div>
+        );
+      }
+
+      function LifemapsPage() {
+        const [mode, setMode] = useState("financial");
+        const [tone, setTone] = useState("dark");
+        const [sortMode, setSortMode] = useState("relevant");
+        const [following, setFollowing] = useState(new Set());
+        const [showAdd, setShowAdd] = useState(false);
+        const data = DATASETS[mode];
+        const [selected, setSelected] = useState(data.nodes[0]);
+
+        useEffect(() => {
+          setSelected(DATASETS[mode].nodes[0]);
+        }, [mode]);
+
+        useEffect(() => {
+          if (!data.nodes.find((n) => n.key === selected?.key)) {
+            setSelected(data.nodes[0]);
+          }
+        }, [data, selected]);
+
+        const toggleFollow = (name) => {
+          setFollowing((prev) => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+          });
+        };
+
+        const experts = useMemo(() => {
+          const key = selected?.key;
+          const items = (data.experts && data.experts[key]) || [];
+          let arr = [...items];
+          if (sortMode === "popular") arr.sort((a, b) => (b.followers || 0) - (a.followers || 0));
+          else if (sortMode === "latest") arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+          else if (sortMode === "following") arr = arr.filter((e) => following.has(e.name));
+          return arr;
+        }, [data, selected, sortMode, following]);
+
+        const onStartChat = (expert, topic) => {
+          window.alert(`Starting a conversation with ${expert.name} about ${topic}. (Prototype action)`);
+        };
+
+        const subtext = tone === "dark" ? "text-zinc-400" : "text-zinc-600";
+        const pageBg = tone === "dark" ? "from-slate-950 via-slate-900 to-slate-950" : "from-slate-100 via-white to-slate-100";
+
+        return (
+          <div className={`min-h-screen bg-gradient-to-br ${pageBg} transition-colors duration-300`}> 
+            <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
+              <header className="flex flex-col gap-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className={`text-xs uppercase tracking-[0.3em] ${subtext}`}>Lifemaps.ai</div>
+                    <h1 className={`text-3xl sm:text-4xl font-semibold ${tone === "dark" ? "text-white" : "text-slate-900"}`}>
+                      Orbit your life with confidence
+                    </h1>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${subtext}`}>Tone</span>
+                    <button
+                      onClick={() => setTone("light")}
+                      className={`px-3 py-1.5 rounded-full border text-sm ${
+                        tone === "light" ? "bg-white text-slate-900 border-slate-300" : "border-slate-600 text-slate-300"
+                      }`}
+                    >
+                      Light
+                    </button>
+                    <button
+                      onClick={() => setTone("dark")}
+                      className={`px-3 py-1.5 rounded-full border text-sm ${
+                        tone === "dark" ? "bg-slate-900 text-white border-slate-600" : "border-slate-400 text-slate-600"
+                      }`}
+                    >
+                      Dark
+                    </button>
+                  </div>
+                </div>
+                <nav className="flex flex-wrap items-center gap-3 text-sm">
+                  {["financial", "personal", "health"].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setMode(m)}
+                      className={`px-3 py-1.5 rounded-full border transition ${
+                        mode === m
+                          ? tone === "dark"
+                            ? "bg-white text-black border-white"
+                            : "bg-black text-white border-black"
+                          : tone === "dark"
+                          ? "border-white/20 text-zinc-200 hover:border-white/40"
+                          : "border-zinc-300 text-zinc-600 hover:border-zinc-500"
+                      }`}
+                    >
+                      {m.charAt(0).toUpperCase() + m.slice(1)}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setShowAdd(true)}
+                    className={`ml-2 h-8 w-8 rounded-full grid place-items-center text-lg leading-none ${
+                      tone === "dark" ? "bg-white text-black" : "bg-black text-white"
+                    }`}
+                    title="Add a new life domain"
+                  >
+                    +
+                  </button>
+                  <div className="ml-3 flex items-center gap-2">
+                    <span className={`text-xs ${subtext}`}>Sort</span>
+                    <select
+                      value={sortMode}
+                      onChange={(e) => setSortMode(e.target.value)}
+                      className={`text-xs px-2 py-1 rounded-lg border ${
+                        tone === "dark"
+                          ? "bg-black/40 text-zinc-200 border-white/20"
+                          : "bg-white text-zinc-800 border-zinc-300"
+                      }`}
+                    >
+                      <option value="relevant">Most Relevant</option>
+                      <option value="following">Following</option>
+                      <option value="popular">Most Popular</option>
+                      <option value="latest">Latest</option>
+                    </select>
+                  </div>
+                </nav>
+                {showAdd ? (
+                  <div
+                    className={`text-xs rounded-2xl px-4 py-3 border ${
+                      tone === "dark"
+                        ? "bg-black/40 border-white/20 text-zinc-300"
+                        : "bg-white border-zinc-200 text-zinc-600"
+                    }`}
+                  >
+                    Domain creation coming soon. Sketch ideas in your notes while we build the editor.
+                    <button
+                      onClick={() => setShowAdd(false)}
+                      className={`ml-3 underline ${tone === "dark" ? "text-emerald-300" : "text-emerald-600"}`}
+                    >
+                      Got it
+                    </button>
+                  </div>
+                ) : null}
+              </header>
+
+              <main className="grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8 items-start">
+                <div className="space-y-6">
+                  <OrbitSVG
+                    nodes={data.nodes}
+                    selectedKey={selected?.key}
+                    onSelect={setSelected}
+                    title={data.title}
+                    tone={tone}
+                  />
+                  <Legend tone={tone} />
+                </div>
+                <div className="space-y-6">
+                  <DetailPanel dataset={data} selected={selected} tone={tone} />
+                  <VoicesStrip
+                    items={experts}
+                    tone={tone}
+                    selectedLabel={selected?.label || data.title}
+                    onStartChat={onStartChat}
+                    following={following}
+                    onToggleFollow={toggleFollow}
+                  />
+                </div>
+              </main>
+            </div>
+          </div>
+        );
+      }
+
+      const root = createRoot(document.getElementById("root"));
+      root.render(<LifemapsPage />);
+    </script>
+  </body>
+</html>
